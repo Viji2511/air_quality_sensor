@@ -1,0 +1,181 @@
+#include <Wire.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_GFX.h>
+#include <WiFi.h>
+#include <ThingSpeak.h>
+
+// Define the OLED display
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Define MQ sensor pins (updated based on your pin configuration)
+#define MQ2_PIN 36     // Analog pin for MQ-2
+#define MQ7_PIN 25     // Analog pin for MQ-7
+#define MQ135_PIN 35   // Analog pin for MQ-135
+#define GP2Y1010_PIN 34 // Analog pin for Dust sensor (GP2Y1010AU0F)
+
+// Threshold values for alert (example values, adjust according to your needs)
+float MQ2_THRESHOLD = 300;
+float MQ7_THRESHOLD = 300;
+float MQ135_THRESHOLD = 500;
+float GP2Y1010_THRESHOLD = 100;
+
+// Wi-Fi credentials
+const char* ssid = "your_SSID";
+const char* password = "your_PASSWORD";
+
+// ThingSpeak credentials
+unsigned long channelID = YOUR_CHANNEL_ID;  // Replace with your ThingSpeak channel ID
+const char* writeAPIKey = "YOUR_WRITE_API_KEY";  // Replace with your ThingSpeak Write API Key
+
+WiFiClient client;
+
+// Initialize sensor readings
+int mq2Value, mq7Value, mq135Value, dustValue;
+float dustConcentration;
+
+// Setup the OLED display and pins
+void setup() {
+  Serial.begin(115200);
+  
+  // Initialize OLED
+  if (!display.begin(SSD1306_I2C_ADDRESS, OLED_RESET)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+  
+  display.clearDisplay();
+  display.setTextSize(1);      
+  display.setTextColor(SSD1306_WHITE);  
+  display.setCursor(0,0);
+  display.print("Air Quality Monitor");
+  display.display();
+  delay(1000);
+  
+  // Set up sensor pins
+  pinMode(MQ2_PIN, INPUT);
+  pinMode(MQ7_PIN, INPUT);
+  pinMode(MQ135_PIN, INPUT);
+  pinMode(GP2Y1010_PIN, INPUT);
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+  
+  ThingSpeak.begin(client);  // Initialize ThingSpeak
+}
+
+void loop() {
+  // Read sensor values
+  mq2Value = analogRead(MQ2_PIN);
+  mq7Value = analogRead(MQ7_PIN);
+  mq135Value = analogRead(MQ135_PIN);
+  dustValue = analogRead(GP2Y1010_PIN);
+  
+  // Convert dust sensor value to dust concentration (µg/m³)
+  dustConcentration = (dustValue / 1023.0) * 1000;  // Convert to µg/m³
+
+  // Display sensor values
+  display.clearDisplay();
+  
+  // MQ-2 sensor value
+  display.setCursor(0, 0);
+  display.print("MQ-2: ");
+  display.print(mq2Value);
+  
+  // MQ-7 sensor value
+  display.setCursor(0, 10);
+  display.print("MQ-7: ");
+  display.print(mq7Value);
+  
+  // MQ-135 sensor value
+  display.setCursor(0, 20);
+  display.print("MQ-135: ");
+  display.print(mq135Value);
+  
+  // Dust concentration
+  display.setCursor(0, 30);
+  display.print("Dust: ");
+  display.print(dustConcentration);
+  display.print(" µg/m³");
+  
+  // Suggestions based on sensor values
+  display.setCursor(0, 40);
+  display.print("Suggestions: ");
+  
+  // MQ-2 alert and suggestions
+  if (mq2Value > MQ2_THRESHOLD) {
+    display.setCursor(0, 50);
+    display.print("Gas levels high! Evacuate!");
+  } else if (mq2Value > 200) {
+    display.setCursor(0, 50);
+    display.print("Moderate gases. Ventilate!");
+  } else {
+    display.setCursor(0, 50);
+    display.print("Air quality good.");
+  }
+
+  // MQ-7 alert and suggestions
+  if (mq7Value > MQ7_THRESHOLD) {
+    display.setCursor(0, 50);
+    display.print("CO Levels High! Evacuate!");
+  } else if (mq7Value > 150) {
+    display.setCursor(0, 50);
+    display.print("CO detected. Ventilate!");
+  } else {
+    display.setCursor(0, 50);
+    display.print("CO levels normal.");
+  }
+
+  // MQ-135 alert and suggestions
+  if (mq135Value > MQ135_THRESHOLD) {
+    display.setCursor(0, 50);
+    display.print("Poor air quality! Ventilate!");
+  } else if (mq135Value > 300) {
+    display.setCursor(0, 50);
+    display.print("Air quality moderate. Use purifier.");
+  } else {
+    display.setCursor(0, 50);
+    display.print("Air quality good.");
+  }
+
+  // Dust sensor alert and suggestions
+  if (dustConcentration > GP2Y1010_THRESHOLD) {
+    display.setCursor(0, 50);
+    display.print("Dust levels high! Use purifier!");
+  } else if (dustConcentration > 50) {
+    display.setCursor(0, 50);
+    display.print("Dust detected. Turn on purifier.");
+  } else {
+    display.setCursor(0, 50);
+    display.print("Dust levels low.");
+  }
+  
+  // If everything is normal, display general suggestions
+  if (mq2Value <= MQ2_THRESHOLD && mq7Value <= MQ7_THRESHOLD && mq135Value <= MQ135_THRESHOLD && dustConcentration <= GP2Y1010_THRESHOLD) {
+    display.setCursor(0, 50);
+    display.print("All good! Keep the air fresh!");
+  }
+  
+  // Send data to ThingSpeak
+  ThingSpeak.setField(1, mq2Value);  // Field 1 for MQ2 sensor
+  ThingSpeak.setField(2, mq7Value);  // Field 2 for MQ7 sensor
+  ThingSpeak.setField(3, mq135Value);  // Field 3 for MQ135 sensor
+  ThingSpeak.setField(4, dustConcentration);  // Field 4 for dust sensor
+  
+  int status = ThingSpeak.writeFields(channelID, writeAPIKey);  // Send data to ThingSpeak
+  if(status == 200){
+    Serial.println("Data sent successfully to ThingSpeak");
+  } else {
+    Serial.println("Error sending data to ThingSpeak");
+  }
+
+  display.display();
+  delay(2000); // Update every 2 seconds
+}
