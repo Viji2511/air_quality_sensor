@@ -1,0 +1,31 @@
+#define SENSOR_LED_PIN 2  // Control pin for the internal LED
+#define SENSOR_ANALOG_PIN A0  // Analog output pin
+
+void setup() {
+    Serial.begin(9600);  // Start serial communication
+    pinMode(SENSOR_LED_PIN, OUTPUT);
+}
+
+void loop() {
+    digitalWrite(SENSOR_LED_PIN, LOW);  // Turn on the sensor LED
+    delayMicroseconds(280);  // Wait 280µs (required for stable reading)
+
+    int sensorValue = analogRead(SENSOR_ANALOG_PIN);  // Read analog voltage
+    delayMicroseconds(40);  // Additional delay
+
+    digitalWrite(SENSOR_LED_PIN, HIGH);  // Turn off the sensor LED
+    delayMicroseconds(9680);  // Wait for the next cycle
+
+    float voltage = sensorValue * (5.0 / 1023.0);  // Convert ADC value to voltage
+    float dustDensity = (voltage - 0.1) / 0.005;  // Convert voltage to dust density (mg/m³)
+
+    Serial.print("Raw Sensor Value: ");
+    Serial.print(sensorValue);
+    Serial.print(" - Voltage: ");
+    Serial.print(voltage);
+    Serial.print("V - Dust Density: ");
+    Serial.print(dustDensity);
+    Serial.println(" µg/m³");
+
+    delay(1000);  // Wait before next reading
+}
