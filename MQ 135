@@ -1,5 +1,5 @@
 #define MQ135_ANALOG_PIN A0  // Analog output pin
-#define MQ135_DIGITAL_PIN 2  // Digital output pin
+#define MQ135_DIGITAL_PIN 35  // Digital output pin
 
 void setup() {
     Serial.begin(9600);  // Initialize serial communication
