@@ -1,23 +1,27 @@
-#define MQ135_ANALOG_PIN A0  // Analog output pin
-#define MQ135_DIGITAL_PIN 35  // Digital output pin
+#define MQ135_PIN 34  // Analog pin for MQ-135
 
 void setup() {
-    Serial.begin(9600);  // Initialize serial communication
-    pinMode(MQ135_DIGITAL_PIN, INPUT); // Set digital pin as input
+    Serial.begin(115200);
+    pinMode(MQ135_PIN, INPUT);
+}
+
+float readAirQuality() {
+    int sensorValue = analogRead(MQ135_PIN);  // Read ADC value (0-4095)
+    
+    // Convert ADC reading to voltage (ESP32 ADC is 12-bit)
+    float voltage = sensorValue * (3.3 / 4095.0);
+
+    // Convert voltage to PPM (approximate formula, requires calibration)
+    float ppm = (voltage - 0.1) * 1000;
+
+    return ppm;
 }
 
 void loop() {
-    int airQualityValue = analogRead(MQ135_ANALOG_PIN);  // Read analog value
-    int gasDetected = digitalRead(MQ135_DIGITAL_PIN); // Read digital output
+    float airQuality = readAirQuality();
+    Serial.print("Air Quality (PPM): ");
+    Serial.println(airQuality);
 
-    Serial.print("Analog Value: ");
-    Serial.print(airQualityValue);
-    
-    if (gasDetected == LOW) {
-        Serial.println(" - High Pollution Detected!");
-    } else {
-        Serial.println(" - Air Quality Normal.");
-    }
-
-    delay(1000); // Wait for a second before next reading
+    delay(1000);  // Read every second
 }
+
