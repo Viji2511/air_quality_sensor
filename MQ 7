@@ -1,24 +1,27 @@
-#define MQ7_ANALOG_PIN 34  // Use any ADC-capable GPIO pin
-#define MQ7_DIGITAL_PIN 25  // Use any digital GPIO pin
+#define MQ2_PIN 34  // Analog input from MQ-2 sensor
 
 void setup() {
-    Serial.begin(115200);  // Set baud rate for ESP32
-    pinMode(MQ7_DIGITAL_PIN, INPUT); // Digital pin input
+    Serial.begin(115200);
+    pinMode(MQ2_PIN, INPUT);
+}
+
+float readGasConcentration() {
+    int sensorValue = analogRead(MQ2_PIN);  // Read ADC value (0-4095 for ESP32)
+
+    // Convert ADC reading to voltage
+    float voltage = sensorValue * (3.3 / 4095.0);  // ESP32 ADC is 12-bit (0-3.3V)
+
+    // Convert voltage to approximate PPM (needs calibration)
+    float ppm = (voltage - 0.1) * 1000;  // Adjust based on calibration
+
+    return ppm;
 }
 
 void loop() {
-    int gasValue = analogRead(MQ7_ANALOG_PIN);  // Read analog sensor value
-    int gasDetected = digitalRead(MQ7_DIGITAL_PIN);  // Read digital output
+    float gasConcentration = readGasConcentration();
+    Serial.print("Gas Concentration (PPM): ");
+    Serial.println(gasConcentration);
 
-    Serial.print("Analog Value: ");
-    Serial.print(gasValue);
-
-    if (gasDetected == LOW) {
-        Serial.println(" - High CO Levels Detected!");
-    } else {
-        Serial.println(" - CO Levels Normal.");
-    }
-
-    delay(1000);  // Wait 1 second before next reading
+    delay(1000);  // Read every second
 }
 
