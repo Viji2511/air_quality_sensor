@@ -1,27 +1,36 @@
-#define MQ2_PIN 34  // Analog input from MQ-2 sensor
+#define MQ7_PIN 34  // Analog input from MQ-7 sensor
+#define HEATER_PIN 26  // GPIO for heater control
 
 void setup() {
     Serial.begin(115200);
-    pinMode(MQ2_PIN, INPUT);
+    pinMode(MQ7_PIN, INPUT);
+    pinMode(HEATER_PIN, OUTPUT);
 }
 
-float readGasConcentration() {
-    int sensorValue = analogRead(MQ2_PIN);  // Read ADC value (0-4095 for ESP32)
-
+float readCOConcentration() {
+    int sensorValue = analogRead(MQ7_PIN);  // Read ADC value (0-4095 for ESP32)
+    
     // Convert ADC reading to voltage
     float voltage = sensorValue * (3.3 / 4095.0);  // ESP32 ADC is 12-bit (0-3.3V)
 
-    // Convert voltage to approximate PPM (needs calibration)
-    float ppm = (voltage - 0.1) * 1000;  // Adjust based on calibration
+    // Convert voltage to CO concentration (approximate, needs calibration)
+    float ppm = (voltage - 0.1) * 1000;  
 
     return ppm;
 }
 
 void loop() {
-    float gasConcentration = readGasConcentration();
-    Serial.print("Gas Concentration (PPM): ");
-    Serial.println(gasConcentration);
+    // High temperature phase (5V for 60 seconds) - For CO detection
+    digitalWrite(HEATER_PIN, HIGH);
+    Serial.println("Heating at 5V...");
+    delay(60000);
 
-    delay(1000);  // Read every second
+    float coConcentration = readCOConcentration();
+    Serial.print("CO Concentration (PPM): ");
+    Serial.println(coConcentration);
+
+    // Low temperature phase (1.4V for 90 seconds) - For cleanup
+    digitalWrite(HEATER_PIN, LOW);
+    Serial.println("Cooling at 1.4V...");
+    delay(90000);
 }
-
