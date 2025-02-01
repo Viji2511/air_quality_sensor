@@ -1,8 +1,33 @@
-#define MQ135_PIN 32  // Define the analog pin connected to MQ-135
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED Display Settings
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+#define MQ135_PIN 32 // Define the analog pin connected to MQ-135
 
 void setup() {
     Serial.begin(115200);
     delay(1000); // Allow time for Serial Monitor to initialize
+
+    // Initialize OLED Display
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  
+        Serial.println("OLED initialization failed");
+        while (1); // Stop execution if OLED fails
+    }
+    
+    Serial.println("OLED initialized successfully!");
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("MQ-135 Sensor Ready");
+    display.display();
+    delay(2000);
 }
 
 void loop() {
@@ -14,6 +39,23 @@ void loop() {
     Serial.print(" | Voltage: ");
     Serial.println(voltage, 3); // Print voltage with 3 decimal places
 
+    // Display values on OLED
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("MQ-135 Sensor");
+    
+    display.setCursor(0, 20);
+    display.print("Raw Value: "); 
+    display.print(sensorValue);
+    
+    display.setCursor(0, 40);
+    display.print("Voltage: "); 
+    display.print(voltage, 3); 
+    display.print(" V");
+
+    display.display(); // Update OLED Display
+    
     delay(1000);  // Wait for 1 second before the next reading
 }
+
 
