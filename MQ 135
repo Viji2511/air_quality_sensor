@@ -1,4 +1,4 @@
-#define MQ135_PIN 35  // Define the analog pin connected to MQ-135
+#define MQ135_PIN 32  // Define the analog pin connected to MQ-135
 
 void setup() {
     Serial.begin(115200);
