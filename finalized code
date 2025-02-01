@@ -1,0 +1,143 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED Display Settings
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Sensor Pins
+#define MQ135_PIN 32  // Analog pin for MQ-135
+#define MQ2_PIN 25    // Analog pin for MQ-2
+#define MQ7_PIN 35    // Analog pin for MQ-7
+#define LED_PIN 13    // GPIO controlling Dust Sensor LED
+#define SENSOR_PIN 34 // Analog input from Dust Sensor Vo
+
+void setup() {
+    Serial.begin(115200);
+    delay(1000); // Allow time for Serial Monitor to initialize
+
+    // Initialize OLED Display
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  
+        Serial.println("OLED initialization failed");
+        while (1); // Stop execution if OLED fails
+    }
+    
+    Serial.println("OLED initialized successfully!");
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("MQ Sensors Ready");
+    display.display();
+    delay(2000);
+
+    pinMode(LED_PIN, OUTPUT);  // Set LED pin for dust sensor
+}
+
+// Function to read CO concentration from MQ-7
+float readCOConcentration() {
+    int sensorValue = analogRead(MQ7_PIN);
+    float voltage = sensorValue * (3.3 / 4095.0);  
+    float ppm = (voltage - 0.1) * 1000;  // Approximate formula
+    return ppm;
+}
+
+// Function to read dust density
+float readDustDensity() {
+    digitalWrite(LED_PIN, LOW);  
+    delayMicroseconds(280);
+    
+    int sensorValue = analogRead(SENSOR_PIN);  
+    delayMicroseconds(40);
+    
+    digitalWrite(LED_PIN, HIGH);  
+    delayMicroseconds(9680);
+
+    float voltage = sensorValue * (3.3 / 4095.0);  
+    float dustDensity = (voltage - 0.1) * 500;  // Output in µg/m³
+
+    return dustDensity;
+}
+
+void loop() {
+    // Read MQ sensor values
+    int mq135Value = analogRead(MQ135_PIN);
+    int mq2Value = analogRead(MQ2_PIN);
+    float coConcentration = readCOConcentration();
+    float dustDensity = readDustDensity();
+
+    // Print values to Serial Monitor
+    Serial.print("MQ-135: ");
+    Serial.print(mq135Value);
+    Serial.print("   ||   ");
+
+    Serial.print("MQ-2: ");
+    Serial.print(mq2Value);
+    Serial.print("   ||   ");
+
+    Serial.print("MQ-7 CO PPM: ");
+    Serial.print(coConcentration);
+    Serial.print("   ||   ");
+
+    Serial.print("Dust Density: ");
+    Serial.print(dustDensity);
+    Serial.println(" µg/m³");
+
+    // Display values on OLED for 10 seconds
+    for (int i = 0; i < 10; i++) {
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.print("MQ-135: "); 
+        display.print(mq135Value);
+
+        display.setCursor(0, 12);
+        display.print("MQ-2: "); 
+        display.print(mq2Value);
+
+        display.setCursor(0, 24);
+        display.print("CO PPM: "); 
+        display.print(coConcentration);
+
+        display.setCursor(0, 36);
+        display.print("Dust: ");
+        display.print(dustDensity);
+        display.print(" µg/m³");
+
+        display.display();
+        delay(1000);  // Wait 1 second before refreshing
+    }
+
+    // Display funny suggestions for 10 seconds
+    for (int i = 0; i < 10; i++) {
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        
+        if (coConcentration > 50 || dustDensity > 100) {
+            display.print("Open a window!");
+            display.setCursor(0, 12);
+            display.print("Not the one to escape through!");
+        } else if (mq135Value > 500) {
+            display.print("Run, it's a gas attack!");
+            display.setCursor(0, 12);
+            display.print("Just kidding...or am I?");
+        } else if (mq2Value > 400) {
+            display.print("No smoking indoors!");
+            display.setCursor(0, 12);
+            display.print("Let's save some lungs!");
+        } else if (dustDensity > 50) {
+            display.print("Dust, dust, go away!");
+            display.setCursor(0, 12);
+            display.print("Get out of here, you are not invited.");
+        } else {
+            display.print("Air quality is prime!");
+            display.setCursor(0, 12);
+            display.print("Feel free to breathe deeply!");
+        }
+
+        display.display();
+        delay(1000);  // Wait 1 second before refreshing
+    }
+}
