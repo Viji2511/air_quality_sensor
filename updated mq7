@@ -1,0 +1,130 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_GFX.h>
+
+#define SCREEN_WIDTH 128  // OLED display width
+#define SCREEN_HEIGHT 64  // OLED display height
+#define OLED_RESET -1     // OLED reset pin (if needed)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+#define MQ7_PIN 35          // MQ-7 sensor analog pin (for CO gas)
+#define DUST_SENSOR_PIN 34  // Dust sensor analog output pin
+#define LED_PIN 13          // LED control for dust sensor
+
+#define ADC_MAX 4095.0      // ESP32 ADC is 12-bit
+#define REF_VOLTAGE 3.3     // ESP32 reference voltage
+
+// WiFi & ThingSpeak Settings
+const char* ssid = "Hi";  
+const char* password = "12345678";  
+const char* server = "http://api.thingspeak.com/update";  
+String apiKey = "2RM3FD5H6LCOT8CD";  
+
+unsigned long previousMillis = 0;
+const long interval = 15000;  // ThingSpeak updates every 15 seconds
+
+void setup() {
+    Serial.begin(115200);
+    WiFi.begin(ssid, password);
+
+    // Initialize OLED display
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C, OLED_RESET)) {
+        Serial.println(F("SSD1306 allocation failed"));
+        while (true);
+    }
+    display.display();  
+    delay(2000);  // Pause for 2 seconds to display the startup logo
+
+    // Connect to Wi-Fi
+    Serial.print("Connecting to WiFi...");
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 10) {
+        Serial.print(".");
+        delay(1000);
+        attempts++;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi Connection Failed! Check your credentials.");
+        return;
+    }
+    Serial.println("Connected!");
+    
+    pinMode(LED_PIN, OUTPUT);
+}
+
+int readSensor(int pin) {
+    long sum = 0;
+    for (int i = 0; i < 10; i++) {
+        sum += analogRead(pin);
+        delay(10);  
+    }
+    return sum / 10;  // Average of 10 readings
+}
+
+void loop() {
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= interval) {
+        previousMillis = currentMillis;
+
+        // Read MQ-7 CO Gas Sensor
+        int gasRaw = readSensor(MQ7_PIN);
+        float gasVoltage = gasRaw * (REF_VOLTAGE / ADC_MAX);
+
+        // Read Dust Sensor (GP2Y1010AU0F)
+        digitalWrite(LED_PIN, LOW);  // Turn ON LED for stable reading
+        delayMicroseconds(280);  
+        int dustRaw = readSensor(DUST_SENSOR_PIN);
+        delayMicroseconds(40);
+        digitalWrite(LED_PIN, HIGH);  // Turn OFF LED
+        float dustVoltage = dustRaw * (REF_VOLTAGE / ADC_MAX);
+        float dustConcentration = (dustVoltage - 0.1) * 500.0;  // Approximate conversion
+
+        // Print values to Serial Monitor
+        Serial.print("MQ-7 CO Gas: ");
+        Serial.print(gasRaw);
+        Serial.print(" | Voltage: ");
+        Serial.println(gasVoltage, 3);
+
+        Serial.print("Dust Sensor: ");
+        Serial.print(dustRaw);
+        Serial.print(" | Voltage: ");
+        Serial.print(dustVoltage, 3);
+        Serial.print(" | Dust Concentration: ");
+        Serial.print(dustConcentration);
+        Serial.println(" µg/m3");
+
+        // Display data on OLED
+        display.clearDisplay();
+        display.setTextSize(1);      
+        display.setTextColor(SSD1306_WHITE);  
+        display.setCursor(0, 0);    
+        display.print("MQ-7 CO: ");
+        display.println(gasVoltage, 3);
+        display.print("Dust Conc: ");
+        display.println(dustConcentration);
+        display.display();
+
+        // Send Data to ThingSpeak
+        if (WiFi.status() == WL_CONNECTED) {
+            HTTPClient http;
+            String url = String(server) + "?api_key=" + apiKey +
+                         "&field1=" + String(gasVoltage) +
+                         "&field2=" + String(dustConcentration);
+
+            http.begin(url);
+            int httpResponseCode = http.GET();
+            if (httpResponseCode == 200) {
+                Serial.println("Data sent to ThingSpeak");
+            } else {
+                Serial.print("Failed to send data. HTTP Response Code: ");
+                Serial.println(httpResponseCode);
+            }
+            http.end();
+        } else {
+            Serial.println("WiFi Disconnected!");
+        }
+    }
+}
