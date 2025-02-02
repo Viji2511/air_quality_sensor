@@ -1,0 +1,200 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// WiFi Credentials
+const char* ssid = "Hi";
+const char* password = "12345678";
+
+// ThingSpeak API
+String apiKey = "2RM3FD5H6LCOT8CD";
+const char* server = "http://api.thingspeak.com/update";
+
+// OLED Display Settings
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Sensor Pins
+#define MQ135_PIN 32  // Analog pin for MQ-135
+#define MQ2_PIN 25    // Analog pin for MQ-2
+#define MQ7_PIN 35    // Analog pin for MQ-7
+#define LED_PIN 13    // GPIO controlling Dust Sensor LED
+#define SENSOR_PIN 34 // Analog input from Dust Sensor Vo
+
+// Calibration Constants
+float mq135Baseline = 0;
+float mq2Baseline = 0;
+float mq7Baseline = 0;
+float dustOffset = 0;
+
+// Function to calibrate sensors
+void calibrateSensors() {
+    Serial.println("Calibrating sensors...");
+    long mq135Sum = 0, mq2Sum = 0, mq7Sum = 0, dustSum = 0;
+
+    for (int i = 0; i < 50; i++) {
+        mq135Sum += analogRead(MQ135_PIN);
+        mq2Sum += analogRead(MQ2_PIN);
+        mq7Sum += analogRead(MQ7_PIN);
+        dustSum += analogRead(SENSOR_PIN);
+        delay(100);
+    }
+
+    mq135Baseline = mq135Sum / 50.0;
+    mq2Baseline = mq2Sum / 50.0;
+    mq7Baseline = mq7Sum / 50.0;
+    dustOffset = dustSum / 50.0;
+
+    Serial.println("Calibration Complete.");
+}
+
+void setup() {
+    Serial.begin(115200);
+    delay(1000); // Allow time for Serial Monitor to initialize
+
+    // Connect to WiFi
+    WiFi.begin(ssid, password);
+    Serial.print("Connecting to WiFi");
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("\nConnected to WiFi!");
+
+    // Initialize OLED Display
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  
+        Serial.println("OLED initialization failed");
+        while (1);
+    }
+    Serial.println("OLED initialized successfully!");
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("Sensors Warming Up...");
+    display.display();
+    
+    pinMode(LED_PIN, OUTPUT);
+    
+    // Sensor Warm-Up Time
+    delay(5000);  
+
+    // Calibrate sensors
+    calibrateSensors();
+}
+
+// Function to read CO concentration from MQ-7
+float readCOConcentration() {
+    int sensorValue = analogRead(MQ7_PIN);
+    float voltage = sensorValue * (3.3 / 4095.0);
+    float ppm = ((voltage - 0.1) * 1000) - mq7Baseline;
+    return max(ppm, 0.0f); // Ensure valid values
+}
+
+// Function to read dust density
+float readDustDensity() {
+    digitalWrite(LED_PIN, LOW);
+    delayMicroseconds(280);
+    
+    int sensorValue = analogRead(SENSOR_PIN);
+    delayMicroseconds(40);
+    
+    digitalWrite(LED_PIN, HIGH);
+    delayMicroseconds(9680);
+
+    float voltage = sensorValue * (3.3 / 4095.0);
+    float dustDensity = ((voltage - 0.1) * 500) - dustOffset;
+
+    return max(dustDensity, 0.0f);
+}
+
+void loop() {
+    analogReadResolution(12);  // Ensure 12-bit resolution for ESP32 ADC
+
+    // Read MQ sensor values
+    int mq135Value = analogRead(MQ135_PIN) - mq135Baseline;
+    int mq2Value = analogRead(MQ2_PIN) - mq2Baseline;
+    float coConcentration = readCOConcentration();
+    float dustDensity = readDustDensity();
+
+    // Fix for MQ2 Sensor showing 0
+    if (mq2Value < 10) mq2Value = 0;
+
+    // Print values to Serial Monitor
+    Serial.print("MQ-135: "); Serial.print(mq135Value);
+    Serial.print(" || MQ-2: "); Serial.print(mq2Value);
+    Serial.print(" || CO PPM: "); Serial.print(coConcentration);
+    Serial.print(" || Dust Density: "); Serial.print(dustDensity);
+    Serial.println(" µg/m³");
+
+    // Display values on OLED
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("MQ-135: "); display.print(mq135Value);
+    display.setCursor(0, 12);
+    display.print("MQ-2: "); display.print(mq2Value);
+    display.setCursor(0, 24);
+    display.print("CO PPM: "); display.print(coConcentration);
+    display.setCursor(0, 36);
+    display.print("Dust: "); display.print(dustDensity);
+    display.print(" µg/m³");
+    display.display();
+    delay(3000);
+
+    // Display Air Quality Suggestion
+    display.clearDisplay();
+    display.setCursor(0, 0);
+
+    if (coConcentration > 50 || dustDensity > 100) {
+        display.print("Air quality is poor!");
+        display.setCursor(0, 12);
+        display.print("Increase ventilation.");
+    } else if (mq135Value > 500) {
+        display.print("High gas levels!");
+        display.setCursor(0, 12);
+        display.print("Check for leaks.");
+    } else if (mq2Value > 400) {
+        display.print("Smoke detected!");
+        display.setCursor(0, 12);
+        display.print("Ensure no fire risk.");
+    } else if (dustDensity > 50) {
+        display.print("High dust levels!");
+        display.setCursor(0, 12);
+        display.print("Consider air filtering.");
+    } else {
+        display.print("Air quality is good.");
+        display.setCursor(0, 12);
+        display.print("Breathe safely.");
+    }
+
+    display.display();
+    delay(3000);
+
+    // Send data to ThingSpeak
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        String url = String(server) + "?api_key=" + apiKey +
+                     "&field1=" + String(mq135Value) +
+                     "&field2=" + String(mq2Value) +
+                     "&field3=" + String(coConcentration) +
+                     "&field4=" + String(dustDensity);
+
+        http.begin(url);
+        int httpCode = http.GET();
+        if (httpCode > 0) {
+            Serial.println("ThingSpeak update successful.");
+        } else {
+            Serial.println("Error updating ThingSpeak.");
+        }
+        http.end();
+    } else {
+        Serial.println("WiFi Disconnected. Cannot send data.");
+    }
+
+    delay(10000); // Wait before next reading
+}
