@@ -1,10 +1,8 @@
-#define MQ7_PIN 34  // Analog input from MQ-7 sensor
-#define HEATER_PIN 26  // GPIO for heater control
+#define MQ7_PIN 35  // Analog input from MQ-7 sensor
 
 void setup() {
     Serial.begin(115200);
     pinMode(MQ7_PIN, INPUT);
-    pinMode(HEATER_PIN, OUTPUT);
 }
 
 float readCOConcentration() {
@@ -20,17 +18,9 @@ float readCOConcentration() {
 }
 
 void loop() {
-    // High temperature phase (5V for 60 seconds) - For CO detection
-    digitalWrite(HEATER_PIN, HIGH);
-    Serial.println("Heating at 5V...");
-    delay(60000);
-
     float coConcentration = readCOConcentration();
     Serial.print("CO Concentration (PPM): ");
     Serial.println(coConcentration);
 
-    // Low temperature phase (1.4V for 90 seconds) - For cleanup
-    digitalWrite(HEATER_PIN, LOW);
-    Serial.println("Cooling at 1.4V...");
-    delay(90000);
+    delay(5000);  // Wait 5 seconds before the next reading
 }
